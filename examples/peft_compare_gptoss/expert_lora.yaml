@@ -1,0 +1,61 @@
+### model — openai/gpt-oss-20b (mxfp4 权重, llamafactory 自动 Mxfp4Config(dequantize=True) 反量化为 bf16)
+# 24 层全 MoE | E=32 top_k=4 | d=2880 inter=2880 | vocab 201k
+model_name_or_path: ./models/gpt-oss-20b
+trust_remote_code: true
+use_reentrant_gc: false
+
+### method — expert-LoRA: per-expert d->d bypass, reuse MoE router (follow_moe, n=32, top_k=4) + attn LoRA
+# 参数对齐(估算, 24 层 x 32 experts, d=2880, inter=2880; ~0.25% of 20B):
+#   weight_lora r4   : experts 11.06M*r=44.2M + attn(r2) 1.0M ~= 45M
+#   weight_dora r4   : 45M + magnitude 6.8M ~= 52M
+#   weight_oft  b16  : experts 49.8M + attn 1.4M ~= 51M (b 须整除 5760/2880/4096/512)
+#   expert_lora r12  : 24*32*2*12*2880 = 53.1M + attn 1.0M ~= 54M
+#   expert_moe_lora  : N*r=384 -> 53.1M + router + attn ~= 54-55M
+# 冒烟后按训练日志打印的 trainable 数微调(与 qwen3 流程一致)。
+stage: sft
+do_train: true
+finetuning_type: moe_lora
+moe_lora_n_experts: 32
+moe_lora_rank: 12
+moe_lora_alpha: 24
+moe_lora_top_k: 4
+moe_lora_pool_share: per_layer
+moe_lora_w_share: per_layer
+moe_lora_routing_mode: follow_moe
+moe_lora_target_layers: all
+moe_lora_attach_ffn: true
+moe_lora_attach_attn: true
+moe_lora_attn_targets: auto
+moe_lora_attn_rank: 2
+moe_lora_attn_alpha: 4
+### dataset
+dataset: metamathqa_r1
+template: default
+cutoff_len: 2048
+max_samples: 80000
+preprocessing_num_workers: 16
+dataloader_num_workers: 4
+
+### output
+output_dir: saves/peft_compare_nm/gptoss/math/expert_lora
+logging_steps: 5
+save_steps: 1000
+plot_loss: true
+overwrite_output_dir: true
+save_only_model: true
+report_to: none
+run_name: expert_lora_gptoss_math
+
+### train (2026-07-12: eager attention 下 PBS12 在 math/cutoff2048 擦线 OOM, 收敛为 6x6; 有效 batch 恒=144)
+per_device_train_batch_size: 6
+gradient_accumulation_steps: 6
+learning_rate: 6.0e-4
+num_train_epochs: 1.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true
+gradient_checkpointing: true
+ddp_find_unused_parameters: true
+
+### deepspeed (frozen base -> ZeRO-2, 不做参数切分)
+deepspeed: examples/deepspeed/ds_z2_config.json

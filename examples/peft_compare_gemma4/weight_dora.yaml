@@ -1,0 +1,54 @@
+### model — google/gemma-4-26B-A4B (base, 多模态壳 Gemma4ForConditionalGeneration)
+# 30 层全 MoE | E=128 top_k=8 | d=2816 moe_inter=704 | vocab 262k
+model_name_or_path: ./models/gemma-4-26B-A4B
+trust_remote_code: true
+use_reentrant_gc: false
+
+### method — weight-DORA: canonical dora on expert weights (gate_up+down) + attn q/k/v/o
+# 参数对齐(估算, 30 层 x 128 experts, d=2816, moe_inter=704; 与 qwen3 anchor 同为 ~0.25% 量级):
+#   weight_lora r2   : experts 29.7M*r=59.5M + attn(r2) 1.4M ~= 61M
+#   weight_dora r2   : 61M + magnitude 16.5M ~= 77M
+#   weight_oft  b8   : experts 56.8M + attn 1.2M ~= 58M
+#   expert_lora r3   : 30*128*2*3*2816 = 64.9M + attn 1.4M ~= 66M
+#   expert_moe_lora  : N*r=384 -> 64.9M + router + attn ~= 66-68M
+# 冒烟后按训练日志打印的 trainable 数微调(与 qwen3 流程一致)。
+stage: sft
+do_train: true
+finetuning_type: weight_peft
+weight_peft_type: dora
+weight_peft_rank: 2
+weight_peft_alpha: 4
+weight_peft_attach_attn: true
+weight_peft_attach_ffn: true
+weight_peft_attn_targets: auto
+### dataset
+dataset: metamathqa_r1
+template: default
+cutoff_len: 2048
+max_samples: 80000
+preprocessing_num_workers: 16
+dataloader_num_workers: 4
+
+### output
+output_dir: saves/peft_compare_nm/gemma4/math/weight_dora
+logging_steps: 5
+save_steps: 1000
+plot_loss: true
+overwrite_output_dir: true
+save_only_model: true
+report_to: none
+run_name: weight_dora_gemma4_math
+
+### train
+per_device_train_batch_size: 6
+gradient_accumulation_steps: 6
+learning_rate: 6.0e-4
+num_train_epochs: 1.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true
+gradient_checkpointing: true
+ddp_find_unused_parameters: true
+
+### deepspeed (frozen base -> ZeRO-2, 不做参数切分)
+deepspeed: examples/deepspeed/ds_z2_config.json

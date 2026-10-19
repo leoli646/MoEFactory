@@ -1,0 +1,53 @@
+### model — google/gemma-4-26B-A4B (base, 多模态壳 Gemma4ForConditionalGeneration)
+# 30 层全 MoE | E=128 top_k=8 | d=2816 moe_inter=704 | vocab 262k
+model_name_or_path: ./models/gemma-4-26B-A4B
+trust_remote_code: true
+use_reentrant_gc: false
+
+### method (baseline1: follow_moe — 路由直接复用 Gemma4 原 router; position ablation 的 FFN 分支基座)
+# trainable = 30 层 × 128 experts × 2(A,B) × rank × 2816
+#   rank=2 → 43.3M (≈0.17% of 26B) — 与 qwen3 baseline1(rank=2, 50M, 0.168%) 同比例
+# attn / router 位置的 LoRA 由 run_pos_ab_nm.sh 以覆盖参数追加(ATTN_RANK/ROUTER_RANK, 默认 8/16)。
+stage: sft
+do_train: true
+finetuning_type: moe_lora
+moe_lora_n_experts: 128                  # 必须 = Gemma4 num_experts
+moe_lora_rank: 2
+moe_lora_alpha: 4
+moe_lora_top_k: 8                        # = Gemma4 top_k_experts
+moe_lora_pool_share: per_layer
+moe_lora_w_share: per_layer
+moe_lora_routing_mode: follow_moe
+moe_lora_target_layers: all
+
+### dataset (跨模型协议与 pos_ab 的 OLMoE/DeepSeek 一致: template=default; intent 由 runner 覆盖)
+dataset: metamathqa_r1
+template: default
+cutoff_len: 2048
+max_samples: 80000
+preprocessing_num_workers: 16
+dataloader_num_workers: 4
+
+### output
+output_dir: saves/pos_ab_nm/math/gemma4_ffn_ep1
+logging_steps: 5
+save_steps: 1000
+plot_loss: true
+overwrite_output_dir: true
+save_only_model: true
+report_to: none
+run_name: gemma4_baseline1_math
+
+### train (262k vocab + 26B 权重: PBS=6 GAS=6, 有效 batch 6*6*4=144 与 qwen3 anchor 相同)
+per_device_train_batch_size: 6
+gradient_accumulation_steps: 6
+learning_rate: 6.0e-4
+num_train_epochs: 1.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true
+gradient_checkpointing: true
+ddp_find_unused_parameters: true
+
+### deepspeed
+deepspeed: examples/deepspeed/ds_z2_config.json

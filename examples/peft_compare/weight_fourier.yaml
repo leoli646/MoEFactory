@@ -1,0 +1,52 @@
+### model
+model_name_or_path: ./models/Qwen3-30B-A3B-Base
+trust_remote_code: true
+use_reentrant_gc: false
+
+### method — weight-FourierFT: DFT spectral delta on expert weights (gate_up+down) + attn q/k/v/o
+# trainable = n_freq * (48*2*128 experts + 48*4 attn) = 12480 * n_freq.
+# n_freq=6000 -> ~74.9M (~0.25% of 30B), comparable to weight-LoRA. scaling=150 (HF default).
+# NOTE: the per-expert iDFT runs inside the per-expert loop (bounded [out,in] transient,
+#       active experts only). It is the most compute-heavy method here; watch step time in smoke.
+stage: sft
+do_train: true
+finetuning_type: weight_peft
+weight_peft_type: fourier
+weight_peft_fourier_n_frequencies: 6000
+weight_peft_fourier_scaling: 150.0
+weight_peft_fourier_seed: 2024
+weight_peft_attach_attn: true
+weight_peft_attach_ffn: true
+weight_peft_attn_targets: auto
+
+### dataset
+dataset: metamathqa_r1
+template: qwen3
+cutoff_len: 2048
+max_samples: 80000
+preprocessing_num_workers: 16
+dataloader_num_workers: 4
+
+### output
+output_dir: saves/peft_compare/weight_fourier
+logging_steps: 5
+save_steps: 1000
+plot_loss: true
+overwrite_output_dir: true
+save_only_model: true
+report_to: none
+run_name: weight_fourier_math_base
+
+### train
+per_device_train_batch_size: 12
+gradient_accumulation_steps: 3
+learning_rate: 6.0e-4
+num_train_epochs: 1.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true
+gradient_checkpointing: true
+ddp_find_unused_parameters: true
+
+### deepspeed (frozen 30B base -> ZeRO-2, no param sharding)
+deepspeed: examples/deepspeed/ds_z2_config.json

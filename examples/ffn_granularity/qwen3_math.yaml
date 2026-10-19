@@ -1,0 +1,64 @@
+### model
+model_name_or_path: ./models/Qwen3-30B-A3B-Base
+trust_remote_code: true
+use_reentrant_gc: false
+
+### method
+# The runner overrides only the FFN-granularity fields below. Attention and
+# router LoRA stay identical in all nine trials.
+stage: sft
+do_train: true
+finetuning_type: moe_lora
+moe_lora_attach_ffn: true
+moe_lora_attach_attn: true
+moe_lora_attach_router: true
+moe_lora_attn_targets: auto
+moe_lora_attn_rank: 32
+moe_lora_attn_alpha: 64
+moe_lora_router_rank: 8
+moe_lora_router_alpha: 16
+moe_lora_pool_share: per_layer
+moe_lora_w_share: per_layer
+moe_lora_target_layers: all
+moe_lora_balance_loss_coef: 0.0
+
+# Valid standalone default: one rank-256 LoRA beside each complete MoE FFN.
+moe_lora_ffn_granularity: bypass
+moe_lora_routing_mode: independent
+moe_lora_n_experts: 1
+moe_lora_top_k: 1
+moe_lora_rank: 256
+moe_lora_alpha: 512
+moe_lora_layer_ranks: ""
+
+### dataset
+dataset: metamathqa_r1
+template: qwen3
+cutoff_len: 2048
+max_samples: 80000
+preprocessing_num_workers: 16
+dataloader_num_workers: 4
+
+### output
+output_dir: saves/ffn_granularity/qwen3/default
+logging_steps: 5
+save_steps: 100
+plot_loss: true
+overwrite_output_dir: true
+save_only_model: true
+report_to: none
+run_name: qwen3_ffn_granularity_default
+
+### train
+per_device_train_batch_size: 6
+gradient_accumulation_steps: 6
+learning_rate: 1.0e-4
+num_train_epochs: 1.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true
+gradient_checkpointing: true
+ddp_find_unused_parameters: true
+
+### deepspeed
+deepspeed: examples/deepspeed/ds_z2_config.json

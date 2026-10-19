@@ -1,0 +1,53 @@
+### model
+model_name_or_path: ./models/Qwen3-30B-A3B-Base
+trust_remote_code: true
+use_reentrant_gc: false
+
+### method (baseline1: follow_moe — 路由直接复用 Qwen3 原 router)
+# Qwen3 N_E=128, 48 层。每个 MoE expert 挂一份 LoRA(n_lora 必须 = 128)
+# trainable = 48 × 128 × 2(A,B) × rank × 2048
+#   rank=2 → 50.33M (≈0.168% of 30B);与 stdlora(q/v, rank=96 ≈40M)做参数预算对齐
+# follow_moe 受 N_E 约束无法精确到 40M,50M 是该 baseline 的最低实用配置(rank=1 表达力过低)
+stage: sft
+do_train: true
+finetuning_type: moe_lora
+moe_lora_n_experts: 128                  # 必须 = Qwen3 num_experts
+moe_lora_rank: 2
+moe_lora_alpha: 4                         # 2 × rank
+moe_lora_top_k: 8                         # = Qwen3 num_experts_per_tok
+moe_lora_pool_share: per_layer
+moe_lora_w_share: per_layer
+moe_lora_routing_mode: follow_moe         # 跳过 RoutingProjection
+moe_lora_target_layers: all
+
+### dataset
+dataset: metamathqa_r1
+template: qwen3
+cutoff_len: 2048
+max_samples: 80000
+preprocessing_num_workers: 16
+dataloader_num_workers: 4
+
+### output
+output_dir: saves/qwen3/moe_lora/baseline1_follow_moe_math_base
+logging_steps: 5
+save_steps: 100
+plot_loss: true
+overwrite_output_dir: true
+save_only_model: true
+report_to: none
+run_name: qwen3_baseline1_math_base
+
+### train
+per_device_train_batch_size: 12
+gradient_accumulation_steps: 3
+learning_rate: 6.0e-4
+num_train_epochs: 1.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true
+gradient_checkpointing: true
+ddp_find_unused_parameters: true
+
+### deepspeed
+deepspeed: examples/deepspeed/ds_z3_config.json

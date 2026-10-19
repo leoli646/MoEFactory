@@ -1,0 +1,65 @@
+### model — google/gemma-4-26B-A4B (base, 多模态壳 Gemma4ForConditionalGeneration)
+# 30 层全 MoE | E=128 top_k=8 | d=2816 moe_inter=704 | vocab 262k
+model_name_or_path: ./models/gemma-4-26B-A4B
+trust_remote_code: true
+use_reentrant_gc: false
+
+### method — expert-moe2-LoRA (V2): 全局共享 LoRA 池 + per-layer W_l 路由投影
+# 本库新方法(MoE^2-LoRA): p_L = softmax(W_l @ [router_logits ; h_c]), 复用 base router 信息。
+# 结构 = 作者 Qwen3 setting(train_moe_lora_qwen3/moe2_best.yaml)原样: N=256, g2, r32, hb128;
+# gemma4 参数带(~58-77M)下作者原始 N=256 直接落带内, 无需像 qwen3 那样扩池:
+#   pool  256×2×32×2816          = 46.1M
+#   W_l   30×(128+128)×128(每组) =  0.98M
+#   h_proj 30×2816×128           = 10.8M
+#   attn  r2(q/k/v/o, 30层)      = ~1.4M   -> 总计 ~59.3M
+# top_k=8 对齐 gemma4 base router top-8(与 qwen3 版 top_k=8 同一规则)。
+stage: sft
+do_train: true
+finetuning_type: moe_lora
+moe_lora_n_experts: 256
+moe_lora_n_groups: 2
+moe_lora_rank: 32
+moe_lora_alpha: 64
+moe_lora_top_k: 8
+moe_lora_pool_share: global
+moe_lora_w_share: per_layer
+moe_lora_routing_mode: learned
+moe_lora_hidden_bottleneck_dim: 128
+moe_lora_target_layers: all
+moe_lora_attach_ffn: true
+moe_lora_attach_attn: true
+moe_lora_attn_targets: auto
+moe_lora_attn_rank: 2
+moe_lora_attn_alpha: 4
+
+### dataset
+dataset: metamathqa_r1
+template: default
+cutoff_len: 2048
+max_samples: 80000
+preprocessing_num_workers: 16
+dataloader_num_workers: 4
+
+### output
+output_dir: saves/peft_compare_nm/gemma4/math/expert_moe2_lora
+logging_steps: 5
+save_steps: 1000
+plot_loss: true
+overwrite_output_dir: true
+save_only_model: true
+report_to: none
+run_name: expert_moe2_lora_gemma4_math
+
+### train
+per_device_train_batch_size: 6
+gradient_accumulation_steps: 6
+learning_rate: 6.0e-4
+num_train_epochs: 1.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true
+gradient_checkpointing: true
+ddp_find_unused_parameters: true
+
+### deepspeed (frozen base -> ZeRO-2, 不做参数切分)
+deepspeed: examples/deepspeed/ds_z2_config.json

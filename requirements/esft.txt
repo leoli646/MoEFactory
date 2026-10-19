@@ -1,0 +1,2 @@
+# Optional vLLM backend for ESFT Intent generation.
+-r vllm.txt

@@ -1,0 +1,65 @@
+### model — openai/gpt-oss-20b (mxfp4 权重, llamafactory 自动 Mxfp4Config(dequantize=True) 反量化为 bf16)
+# 24 层全 MoE | E=32 top_k=4 | d=2880 inter=2880 | vocab 201k
+model_name_or_path: ./models/gpt-oss-20b
+trust_remote_code: true
+use_reentrant_gc: false
+
+### method — expert-moe2-LoRA (V2): 全局共享 LoRA 池 + per-layer W_l 路由投影
+# 本库新方法(MoE^2-LoRA): p_L = softmax(W_l @ [router_logits ; h_c]), 复用 base router 信息。
+# 结构 = 作者 Qwen3 setting(train_moe_lora_qwen3/moe2_best.yaml)原样: N=256, g2, r32, hb128;
+# gptoss 参数带(~45-55M)下作者原始 N=256 基本落带内:
+#   pool  256×2×32×2880         = 47.2M
+#   W_l   24×(32+128)×128(每组) =  0.49M
+#   h_proj 24×2880×128          =  8.85M
+#   attn  r2(q/k/v/o, 24层)     = ~1.0M   -> 总计 ~57.5M(略超 expert_lora 54M, 可接受)
+# top_k=4 对齐 gptoss base router top-4(与 qwen3 版 top_k=8 同一规则: 跟随 base top_k)。
+stage: sft
+do_train: true
+finetuning_type: moe_lora
+moe_lora_n_experts: 256
+moe_lora_n_groups: 2
+moe_lora_rank: 32
+moe_lora_alpha: 64
+moe_lora_top_k: 4
+moe_lora_pool_share: global
+moe_lora_w_share: per_layer
+moe_lora_routing_mode: learned
+moe_lora_hidden_bottleneck_dim: 128
+moe_lora_target_layers: all
+moe_lora_attach_ffn: true
+moe_lora_attach_attn: true
+moe_lora_attn_targets: auto
+moe_lora_attn_rank: 2
+moe_lora_attn_alpha: 4
+
+### dataset
+dataset: metamathqa_r1
+template: default
+cutoff_len: 2048
+max_samples: 80000
+preprocessing_num_workers: 16
+dataloader_num_workers: 4
+
+### output
+output_dir: saves/peft_compare_nm/gptoss/math/expert_moe2_lora
+logging_steps: 5
+save_steps: 1000
+plot_loss: true
+overwrite_output_dir: true
+save_only_model: true
+report_to: none
+run_name: expert_moe2_lora_gptoss_math
+
+### train (2026-07-12: eager attention 下 PBS12 在 math/cutoff2048 擦线 OOM, 收敛为 6x6; 有效 batch 恒=144)
+per_device_train_batch_size: 6
+gradient_accumulation_steps: 6
+learning_rate: 6.0e-4
+num_train_epochs: 1.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true
+gradient_checkpointing: true
+ddp_find_unused_parameters: true
+
+### deepspeed (frozen base -> ZeRO-2, 不做参数切分)
+deepspeed: examples/deepspeed/ds_z2_config.json

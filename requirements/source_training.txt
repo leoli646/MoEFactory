@@ -1,0 +1,15 @@
+# Selected source experiment stack, audited on Python 3.11.15.
+# Install torch/vision/audio from the CUDA 12.8 index first; see docs/environment.md.
+# Combine this file with `pip install -e .` to install remaining project dependencies.
+# This pins core training dependencies; it is not a complete transitive lockfile.
+torch==2.8.0
+torchvision==0.23.0
+torchaudio==2.8.0
+transformers==5.6.0
+peft==0.18.1
+accelerate==1.11.0
+datasets==4.0.0
+trl==0.24.0
+tokenizers==0.22.2
+torchdata==0.11.0
+deepspeed==0.18.4

@@ -1,0 +1,12 @@
+{
+  "label": "MoEFactory source implementation protocol",
+  "seeds": [42, 0, 1],
+  "learning_rates": ["1e-5", "1e-4", "1e-3"],
+  "selection": "For each model/task/setting, evaluate every common LR on seeds 42, 0, 1; select the highest downstream mean and break ties toward the smaller LR.",
+  "downstream": {
+    "math": {"train_dataset": "metamathqa_r1", "evaluation": "MATH-500", "examples": 500, "max_new_tokens": 512},
+    "intent": {"train_dataset": "esft_intent", "evaluation": "Intent exact match", "examples": 500, "max_new_tokens": 512}
+  },
+  "upstream": {"mmlu_pro": {"max_length": 4096}, "ifeval": {"max_model_len": 4096, "max_new_tokens": 1280}},
+  "notice": "These are the checked-in source implementation settings. They are not a claim of exact paper compliance where the source and paper differ."
+}

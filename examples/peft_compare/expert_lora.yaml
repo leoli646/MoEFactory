@@ -1,0 +1,55 @@
+### model
+model_name_or_path: ./models/Qwen3-30B-A3B-Base
+trust_remote_code: true
+use_reentrant_gc: false
+
+### method — expert-LoRA: per-expert d->d bypass, reuse MoE router (follow_moe) + attn LoRA
+# experts 128*4096*r*48 ; r=3 -> 75.5M + attn(r2) 1.67M ~= 77M, rank>=2
+stage: sft
+do_train: true
+finetuning_type: moe_lora
+moe_lora_n_experts: 128
+moe_lora_rank: 3
+moe_lora_alpha: 6
+moe_lora_top_k: 8
+moe_lora_pool_share: per_layer
+moe_lora_w_share: per_layer
+moe_lora_routing_mode: follow_moe
+moe_lora_target_layers: all
+moe_lora_attach_ffn: true
+moe_lora_attach_attn: true
+moe_lora_attn_targets: auto
+moe_lora_attn_rank: 2
+moe_lora_attn_alpha: 4
+
+### dataset
+dataset: metamathqa_r1
+template: qwen3
+cutoff_len: 2048
+max_samples: 80000
+preprocessing_num_workers: 16
+dataloader_num_workers: 4
+
+### output
+output_dir: saves/peft_compare/expert_lora
+logging_steps: 5
+save_steps: 1000
+plot_loss: true
+overwrite_output_dir: true
+save_only_model: true
+report_to: none
+run_name: expert_lora_math_base
+
+### train
+per_device_train_batch_size: 12
+gradient_accumulation_steps: 3
+learning_rate: 6.0e-4
+num_train_epochs: 1.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true
+gradient_checkpointing: true
+ddp_find_unused_parameters: true
+
+### deepspeed
+deepspeed: examples/deepspeed/ds_z2_config.json

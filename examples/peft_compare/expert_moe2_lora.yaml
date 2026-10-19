@@ -1,0 +1,64 @@
+### model
+model_name_or_path: ./models/Qwen3-30B-A3B-Base
+trust_remote_code: true
+use_reentrant_gc: false
+
+### method — expert-moe2-LoRA (V2): 全局共享 LoRA 池 + per-layer W_l 路由投影
+# 本库新方法(MoE^2-LoRA): p_L = softmax(W_l @ [router_logits ; h_c]), 复用 base router 信息。
+# 结构沿用作者 Qwen3 math setting(examples/train_moe_lora_qwen3/moe2_best.yaml):
+#   global pool + w_share=per_layer + n_groups=2 + hidden_bottleneck=128 + top_k=8
+# 为对齐 peft_compare 参数带(~75-103M),总池 256->512(rank/alpha 保持作者值 32/64):
+#   pool  512×2×32×2048            = 67.1M
+#   W_l   48×(128+128)×256(每组)   =  3.15M
+#   h_proj 48×2048×128             = 12.58M
+#   attn  r2(q/k/v/o, 48层)        =  1.67M   -> 总计 ~84.5M
+stage: sft
+do_train: true
+finetuning_type: moe_lora
+moe_lora_n_experts: 512
+moe_lora_n_groups: 2
+moe_lora_rank: 32
+moe_lora_alpha: 64
+moe_lora_top_k: 8
+moe_lora_pool_share: global
+moe_lora_w_share: per_layer
+moe_lora_routing_mode: learned
+moe_lora_hidden_bottleneck_dim: 128
+moe_lora_target_layers: all
+moe_lora_attach_ffn: true
+moe_lora_attach_attn: true
+moe_lora_attn_targets: auto
+moe_lora_attn_rank: 2
+moe_lora_attn_alpha: 4
+
+### dataset
+dataset: metamathqa_r1
+template: qwen3
+cutoff_len: 2048
+max_samples: 80000
+preprocessing_num_workers: 16
+dataloader_num_workers: 4
+
+### output
+output_dir: saves/peft_compare/expert_moe2_lora
+logging_steps: 5
+save_steps: 1000
+plot_loss: true
+overwrite_output_dir: true
+save_only_model: true
+report_to: none
+run_name: expert_moe2_lora_math_base
+
+### train
+per_device_train_batch_size: 12
+gradient_accumulation_steps: 3
+learning_rate: 6.0e-4
+num_train_epochs: 1.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true
+gradient_checkpointing: true
+ddp_find_unused_parameters: true
+
+### deepspeed
+deepspeed: examples/deepspeed/ds_z2_config.json

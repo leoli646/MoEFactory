@@ -1,0 +1,48 @@
+# Python and tooling
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Local environments and secrets
+.venv/
+venv/
+.env
+.env.*
+
+# External inputs and generated outputs
+data/*
+models/*
+!data/
+!data/README.md
+!data/dataset_info.json
+!models/
+!models/README.md
+checkpoints/
+saves/
+results/
+eval_results/
+logs/
+analysis_svd/
+paper_artifacts/
+paper_writing/
+outputs/
+
+# Large model and adapter files
+*.safetensors
+*.safetensors.index.json
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# Common local/editor files
+.DS_Store
+.idea/
+.vscode/
+*.swp
